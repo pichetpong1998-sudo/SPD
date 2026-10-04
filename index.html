@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>SPD Alarm Analyzer</title>
+<style>
+  :root {
+    --bg:#f3f5f8; --panel:#ffffff; --ink:#1a2330; --muted:#5a6676; --line:#dbe0e7; --chip:#edf1f6;
+    --accent:#0a5cff; --accent-ink:#ffffff; --accent-soft:#e6eeff;
+    --ok:#117a3d; --ok-soft:#e3f5ea; --warn:#a85a00; --warn-soft:#fff1de; --bad:#b82b2b; --bad-soft:#fde8e8;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#0f141a; --panel:#171e27; --ink:#e7ecf2; --muted:#9aa6b5; --line:#2a3441; --chip:#212b37;
+      --accent:#5c9dff; --accent-ink:#07111f; --accent-soft:#1a2a45;
+      --ok:#4cc38a; --ok-soft:#143325; --warn:#f2a95d; --warn-soft:#3a2a14; --bad:#ff8080; --bad-soft:#3b1b1b;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.5 "Segoe UI","Leelawadee UI","Noto Sans Thai",system-ui,sans-serif; }
+  header { display:flex; align-items:baseline; gap:16px; flex-wrap:wrap; padding:12px 20px; background:var(--panel); border-bottom:1px solid var(--line); }
+  header h1 { margin:0; font-size:18px; letter-spacing:.2px; }
+  header .sub { color:var(--muted); font-size:12.5px; }
+  header .stats { margin-left:auto; color:var(--muted); font-size:12.5px; }
+  .layout { display:grid; grid-template-columns: minmax(440px, 50%) 1fr; height:calc(100% - 52px); }
+  .left { overflow:auto; padding:14px 16px 40px; }
+  .right { display:flex; flex-direction:column; border-left:1px solid var(--line); background:var(--panel); min-width:0; }
+  .tabs { display:flex; gap:4px; margin-bottom:12px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .tab { appearance:none; background:none; border:0; padding:8px 14px; color:var(--muted); font:inherit; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; }
+  .tab[aria-selected="true"] { color:var(--accent); border-bottom-color:var(--accent); font-weight:600; }
+  .tab:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  input[type=search], input[type=text], select, textarea {
+    font:inherit; color:var(--ink); background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px 10px; width:100%;
+  }
+  textarea { min-height:110px; font-family:var(--mono); font-size:13px; resize:vertical; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:8px 0; }
+  .row > * { flex:0 0 auto; }
+  select { width:auto; max-width:100%; }
+  label.chk { display:flex; gap:6px; align-items:center; color:var(--muted); font-size:13px; }
+  button.btn { font:inherit; border:1px solid var(--line); background:var(--panel); color:var(--ink); padding:7px 12px; border-radius:8px; cursor:pointer; }
+  button.btn:hover { border-color:var(--accent); }
+  button.primary { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); font-weight:600; }
+  .chip { display:inline-flex; align-items:center; gap:4px; font:inherit; font-size:12.5px; background:var(--chip); color:var(--ink); border:1px solid transparent; border-radius:999px; padding:3px 10px; cursor:pointer; margin:2px 4px 2px 0; text-align:left; }
+  .chip:hover { border-color:var(--accent); }
+  .chip.page { background:var(--accent-soft); color:var(--accent); }
+  .muted { color:var(--muted); }
+  .small { font-size:12.5px; }
+  .mono { font-family:var(--mono); }
+  .list { display:flex; flex-direction:column; gap:6px; margin-top:8px; }
+  .item { text-align:left; display:block; width:100%; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:8px 12px; cursor:pointer; font:inherit; color:inherit; }
+  .item:hover { border-color:var(--accent); }
+  .item[aria-current="true"] { border-color:var(--accent); background:var(--accent-soft); }
+  .item .l1 { display:flex; gap:8px; align-items:baseline; flex-wrap:wrap; }
+  .item .addr { font-family:var(--mono); font-weight:700; }
+  .item .desc { font-weight:500; }
+  .item.spare { opacity:.55; }
+  .badge { font-size:11.5px; padding:1px 8px; border-radius:999px; background:var(--chip); color:var(--muted); white-space:nowrap; }
+  .badge.DI { background:var(--ok-soft); color:var(--ok); }
+  .badge.DO { background:var(--warn-soft); color:var(--warn); }
+  .badge.AI, .badge.AO { background:var(--accent-soft); color:var(--accent); }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 16px; margin-top:12px; }
+  .card h2 { margin:0 0 4px; font-size:17px; }
+  .card h3, h3 { margin:16px 0 6px; font-size:13px; color:var(--muted); font-weight:600; }
+  .sig-head { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .sig-head .addr { font-family:var(--mono); font-size:22px; font-weight:700; }
+  .path { display:flex; flex-wrap:wrap; gap:6px; align-items:stretch; margin:10px 0 2px; }
+  .node { border:1px solid var(--line); border-radius:8px; padding:6px 10px; background:var(--bg); min-width:110px; }
+  .node b { display:block; font-family:var(--mono); font-size:13px; }
+  .node span { color:var(--muted); font-size:12px; }
+  .arrow { align-self:center; color:var(--muted); }
+  .note { border-radius:8px; padding:8px 12px; margin:8px 0; font-size:13px; }
+  .note.info { background:var(--accent-soft); }
+  .note.ok { background:var(--ok-soft); }
+  .note.warn { background:var(--warn-soft); }
+  .note.bad { background:var(--bad-soft); }
+  ol.steps, ul.steps { margin:6px 0 0; padding-left:22px; }
+  ol.steps li, ul.steps li { margin:4px 0; }
+  .kb { border-left:3px solid var(--accent); padding-left:12px; margin:12px 0; }
+  .kb .t { font-weight:600; }
+  table { border-collapse:collapse; width:100%; font-size:13px; }
+  th, td { text-align:left; padding:5px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-weight:600; font-size:12px; white-space:nowrap; }
+  table.kv th { width:76px; }
+  .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap:4px 18px; }
+  .viewer-bar { display:flex; gap:8px; align-items:center; padding:8px 12px; border-bottom:1px solid var(--line); }
+  .viewer-bar .ttl { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .viewer-bar a { margin-left:auto; white-space:nowrap; color:var(--accent); }
+  .viewer-body { flex:1; min-height:0; position:relative; }
+  .viewer-body iframe { position:absolute; inset:0; width:100%; height:100%; border:0; background:#fff; }
+  .pv-tools { display:flex; align-items:center; gap:6px; padding:6px 12px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .pv-tools .btn { padding:4px 10px; min-width:36px; }
+  .pv-tools .pv-sp { flex:1; }
+  .pv-page { display:flex; align-items:center; gap:4px; font-size:13px; color:var(--muted); }
+  .pv-page input { width:64px; padding:4px 6px; text-align:center; }
+  .pv-scroll { position:absolute; inset:0; overflow:auto; background:#7d8590; touch-action:pan-x pan-y pinch-zoom; -webkit-overflow-scrolling:touch; }
+  .pv-scroll canvas { display:block; margin:4px auto; background:#fff; box-shadow:0 1px 6px rgba(0,0,0,.4); }
+  .viewer-bar > * { flex:none; }
+  .viewer-bar .ttl { flex:1 1 auto; min-width:0; }
+  .pv-close { display:none; white-space:nowrap; }
+  .pv-tools { flex-wrap:nowrap; overflow-x:auto; gap:4px; }
+  .pv-tools > * { flex:none; }
+  .pv-tools .pv-sp { flex:1 1 0; min-width:4px; }
+  .pv-page input { width:56px; }
+  .empty.loading { background:var(--panel); opacity:.94; }
+  dialog#dlg-phone { border:1px solid var(--line); border-radius:14px; padding:16px; background:var(--panel); color:var(--ink); max-width:min(440px, 92vw); }
+  dialog#dlg-phone::backdrop { background:rgba(0,0,0,.45); }
+  .qr { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin:10px 0; }
+  .qr svg { width:150px; height:150px; background:#fff; border-radius:8px; padding:4px; }
+  .qr .u { word-break:break-all; font-family:var(--mono); font-size:13px; }
+  @media (pointer:coarse) {
+    .btn, .chip, .tab, .segbtn { min-height:40px; }
+    input, select, textarea { font-size:16px; } /* stops iOS from zooming into fields */
+    .item { padding:10px 12px; }
+  }
+  .empty { position:absolute; inset:0; display:grid; place-items:center; color:var(--muted); text-align:center; padding:24px; }
+  .hint { margin:6px 0 0; color:var(--muted); font-size:12.5px; }
+  .foot { margin-top:22px; color:var(--muted); font-size:12px; border-top:1px solid var(--line); padding-top:10px; }
+  mark { background:#ffe38a; color:#222; border-radius:3px; padding:0 2px; }
+  /* alarm cards */
+  details.alarm { background:var(--panel); border:1px solid var(--line); border-left:4px solid var(--muted); border-radius:10px; margin-top:10px; }
+  details.alarm.bad { border-left-color:var(--bad); }
+  details.alarm.warn { border-left-color:var(--warn); }
+  details.alarm > summary { cursor:pointer; padding:9px 12px; display:flex; gap:8px; align-items:baseline; flex-wrap:wrap; list-style:none; }
+  details.alarm > summary::-webkit-details-marker { display:none; }
+  details.alarm > summary::before { content:"▸"; color:var(--muted); }
+  details.alarm[open] > summary::before { content:"▾"; }
+  .alarm-body { padding:0 14px 12px; }
+  .sev { font-size:11.5px; font-weight:700; padding:1px 8px; border-radius:6px; color:#fff; background:var(--muted); }
+  .sev.bad { background:var(--bad); }
+  .sev.warn { background:var(--warn); }
+  @media (prefers-color-scheme: dark) { .sev.bad, .sev.warn { color:#1a1208; } }
+  /* structured alarm form */
+  .seg { display:inline-flex; border:1px solid var(--line); border-radius:10px; overflow:hidden; margin-bottom:10px; }
+  .segbtn { font:inherit; border:0; background:var(--panel); color:var(--muted); padding:7px 14px; cursor:pointer; }
+  .segbtn[aria-pressed="true"] { background:var(--accent); color:var(--accent-ink); font-weight:600; }
+  .hmi-strip { display:flex; flex-wrap:wrap; gap:3px; margin:8px 0 12px; font-size:12px; }
+  .hmi-strip .c { position:relative; background:var(--chip); color:var(--muted); border-radius:6px; padding:3px 9px 3px 9px; }
+  .hmi-strip .c.hot { background:var(--accent-soft); color:var(--accent); font-weight:600; }
+  .hmi-strip .c.time { background:var(--chip); }
+  .hmi-strip .c.dim { opacity:.55; }
+  .hmi-strip i { font-style:normal; font-weight:700; background:var(--accent); color:var(--accent-ink); border-radius:999px; padding:0 6px; margin-left:6px; font-size:11px; }
+  .fm-row { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin-bottom:10px; }
+  .fm-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+  .fm-head b { font-size:13px; }
+  .fm-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px 12px; }
+  .f { display:flex; flex-direction:column; gap:3px; font-size:13px; }
+  .f.wide { grid-column:1 / -1; }
+  .f .lab { display:flex; align-items:center; gap:6px; flex-wrap:wrap; font-weight:600; }
+  .f .lab small { color:var(--muted); font-weight:400; }
+  .f .n { background:var(--accent); color:var(--accent-ink); border-radius:999px; min-width:20px; text-align:center; font-size:11.5px; padding:0 6px; }
+  .req, .opt { font-size:11px; border-radius:999px; padding:0 7px; font-weight:600; }
+  .req { background:var(--bad-soft); color:var(--bad); }
+  .opt { background:var(--chip); color:var(--muted); }
+  .f input, .f select { width:100%; }
+  .f input.bad { border-color:var(--bad); }
+  .sugg { display:flex; flex-wrap:wrap; gap:2px; }
+  .fm-warn { margin-top:6px; }
+  .thumb { height:64px; border-radius:6px; border:1px solid var(--line); vertical-align:middle; margin-right:8px; }
+  .photo-box { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .badge.lowc { background:var(--warn-soft); color:var(--warn); }
+  .badge.src { background:var(--ok-soft); color:var(--ok); }
+  .chip.man { background:var(--ok-soft); color:var(--ok); }
+  details.proc { margin-top:12px; }
+  details.proc summary { cursor:pointer; color:var(--muted); font-size:13px; }
+  textarea.drop { outline:2px dashed var(--accent); }
+  .burst { border-top:1px solid var(--line); padding:8px 0; }
+  .burst:first-of-type { border-top:0; }
+  a { color:var(--accent); }
+  a.mini { display:inline-block; font-family:var(--mono); font-size:11.5px; padding:0 6px; border-radius:6px; background:var(--chip); text-decoration:none; margin:1px 2px 1px 0; }
+  a.mini.bad { background:var(--bad-soft); color:var(--bad); }
+  a.mini.warn { background:var(--warn-soft); color:var(--warn); }
+  details.gloss { margin-top:16px; }
+  details.gloss summary { cursor:pointer; color:var(--muted); font-size:13px; }
+  @media (max-width: 520px) { .fm-grid { grid-template-columns:1fr; } }
+  @media (max-width: 980px) {
+    .layout { grid-template-columns:1fr; height:auto; }
+    /* phones / tablets: the drawing opens full-screen over the page and has a close button */
+    .right { position:fixed; inset:0; z-index:50; display:none; height:auto; border:0; }
+    body.pv-open .right { display:flex; }
+    body.pv-open { overflow:hidden; }
+    .pv-close { display:inline-block; }
+    header .stats, header .sub { display:none; }
+    header { padding:8px 14px; gap:10px; align-items:center; }
+    header h1 { font-size:16px; }
+    header #btn-phone { margin-left:auto; }
+    .grid2 { grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>SPD Alarm Analyzer</h1>
+  <span class="sub">Spreader PA01 · Hongsa Waste Line 1 · วิเคราะห์ Alarm จากหน้าจอ HMI + แบบไฟฟ้า As-Built</span>
+  <span class="stats" id="stats"></span>
+  <button class="btn" id="btn-phone" type="button" title="เปิดเครื่องมือนี้บนมือถือ/แท็บเล็ต">📱 เปิดบนมือถือ</button>
+</header>
+<dialog id="dlg-phone">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><b>เปิดบนมือถือ / แท็บเล็ต</b><button class="btn" id="dlg-close" type="button">ปิด</button></div>
+  <div id="dlg-body" class="small" style="margin-top:8px"></div>
+</dialog>
+
+<div class="layout">
+  <section class="left">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" data-tab="alarm" aria-selected="true">วิเคราะห์ Alarm จาก HMI</button>
+      <button class="tab" role="tab" data-tab="sig" aria-selected="false">ค้นหาสัญญาณ I/O</button>
+      <button class="tab" role="tab" data-tab="dwg" aria-selected="false">สำรวจแบบ / คู่มือ</button>
+    </div>
+
+    <!-- Tab 1 : alarms as shown on the HMI alarm list -->
+    <div id="pane-alarm">
+      <div class="seg" role="group" aria-label="วิธีใส่ Alarm">
+        <button class="segbtn" id="m-form" aria-pressed="true">✍️ กรอกทีละช่อง</button>
+        <button class="segbtn" id="m-paste" aria-pressed="false">📋 วางข้อความ / 📷 แนบรูป</button>
+      </div>
+
+      <!-- mode 1 : one box per HMI column -->
+      <div id="mode-form">
+        <p class="hint" style="margin-top:0">ดูที่หน้าจอ <b>ALARMS</b> ของ HMI แล้วกรอกตามคอลัมน์ — ช่องที่มีป้าย <span class="req">จำเป็น</span> ต้องกรอก ช่องอื่นข้ามได้</p>
+        <div class="hmi-strip" aria-hidden="true">
+          <span class="c dim">Date</span><span class="c dim">Time</span><span class="c dim">=</span>
+          <span class="c hot">++/+<i>1</i></span><span class="c hot">-<i>2</i></span><span class="c">Object name<i>3</i></span><span class="c hot">Event<i>4 · 5</i></span><span class="c dim">Status</span>
+          <span class="c time">Date · Time<i>6</i></span>
+        </div>
+        <div id="fm-rows"></div>
+        <div class="row">
+          <button class="btn primary" id="fm-go">วิเคราะห์</button>
+          <button class="btn" id="fm-add">＋ เพิ่ม Alarm อีกรายการ</button>
+          <button class="btn" id="fm-clear">ล้างทั้งหมด</button>
+          <select id="fm-sample" aria-label="ตัวอย่างจากหน้างาน"></select>
+        </div>
+        <p class="hint">Alarm หลายรายการที่ขึ้นพร้อมกัน → กด “เพิ่ม Alarm อีกรายการ” และใส่ วันที่/เวลา เพื่อให้ระบบหาต้นเหตุร่วมจากลำดับเวลา</p>
+      </div>
+
+      <!-- mode 2 : paste lines or attach a photo -->
+      <div id="mode-paste" hidden>
+        <p class="hint" style="margin-top:0">วางข้อความทั้งบรรทัดจากหน้าจอ (บรรทัดละ 1 Alarm) เช่น <span class="mono">EHA02+LVC03 TB05 FAULT, D.O. GENERAL FAULT</span> หรือแนบรูปถ่ายหน้าจอให้ Claude อ่านให้</p>
+        <textarea id="al-in" placeholder="03/10/26 22:12:37.431 PA01 EHA02+LVC03 TB05 TRIPPER CAR, INVERTER 04 FAULT, D.O. GENERAL FAULT&#10;EHA01+LVC06 FQ01 ALARM, ES/ SF- LOOP TRIP BY SENS. ACTUATION" aria-label="รายการ Alarm"></textarea>
+        <div class="row">
+          <button class="btn primary" id="al-go">วิเคราะห์ (Ctrl+Enter)</button>
+          <button class="btn" id="al-photo-btn" disabled>📷 แนบรูปหน้าจอ HMI</button>
+          <input type="file" id="al-photo" accept="image/*" hidden>
+          <button class="btn" id="al-clear">ล้าง</button>
+          <select id="al-sample" aria-label="ตัวอย่างจากหน้างาน"></select>
+        </div>
+        <div id="al-photo-info" class="hint"></div>
+      </div>
+      <datalist id="dl-loc"></datalist>
+      <datalist id="dl-event"></datalist>
+      <div id="al-out"></div>
+      <details class="gloss"><summary>ตัวย่อที่ใช้ในข้อความ Alarm ของ HMI</summary><table><tbody id="glossary"></tbody></table></details>
+    </div>
+
+    <!-- Tab 2 : PLC I/O signal search -->
+    <div id="pane-sig" hidden>
+      <input type="search" id="q" placeholder="ข้อความ Alarm · ที่อยู่ PLC (E701.1) · แท็กอุปกรณ์ (-FC08) · คำค้น (crawler brake)" autocomplete="off" aria-label="ค้นหาสัญญาณ">
+      <div class="row">
+        <select id="f-kind" aria-label="ชนิดสัญญาณ">
+          <option value="">ทุกชนิด</option><option value="DI">DI อินพุตดิจิทัล</option><option value="DO">DO เอาต์พุตดิจิทัล</option><option value="AI">AI อนาล็อกอินพุต</option><option value="AO">AO อนาล็อกเอาต์พุต</option>
+        </select>
+        <select id="f-cab" aria-label="ตู้"><option value="">ทุกตู้</option></select>
+        <label class="chk"><input type="checkbox" id="f-spare" checked> ซ่อน spare</label>
+      </div>
+      <div class="row" id="examples"></div>
+      <div id="res-info" class="hint"></div>
+      <div class="list" id="results"></div>
+      <div id="detail"></div>
+    </div>
+
+    <!-- Tab 3 : drawings -->
+    <div id="pane-dwg" hidden>
+      <input type="search" id="dq" placeholder="ค้นข้อความทั้งฉบับ (แท็ก, ชื่ออุปกรณ์, เบอร์สายเคเบิล, รหัสสินค้า, ข้อความ Alarm ...)" autocomplete="off" aria-label="ค้นข้อความในเอกสาร">
+      <div class="row">
+        <select id="d-doc" aria-label="เอกสาร"><option value="drawing">แบบไฟฟ้า (As-Built)</option><option value="manual">คู่มือผู้ใช้ (User Manual)</option></select>
+        <select id="d-cab" aria-label="ตู้/ตำแหน่ง"><option value="">ทุกตำแหน่ง</option></select>
+        <span class="hint" id="d-info"></span>
+      </div>
+      <div class="list" id="d-results"></div>
+    </div>
+
+    <div class="foot">
+      อุปกรณ์ สัญญาณ I/O และหน้าอ้างอิงถูกดึงอัตโนมัติจากข้อความในไฟล์ PDF ส่วนสาเหตุและวิธีตรวจเป็นหลักการทั่วไปของงานบำรุงรักษาไฟฟ้า จับคู่กับข้อความ Event และชนิดอุปกรณ์ (ไม่ได้มาจากแบบ) —
+      ต้องยืนยันกับวงจรและสภาพหน้างานทุกครั้ง · แก้ไข/เพิ่มความรู้ได้ที่ <span class="mono">knowledge.js</span>
+    </div>
+  </section>
+
+  <aside class="right" id="viewer">
+    <div class="viewer-bar">
+      <button class="btn pv-close" id="pv-close" type="button" aria-label="ปิดหน้า PDF">✕ ปิด</button>
+      <span class="ttl" id="pdf-title">แบบไฟฟ้า (PDF)</span>
+      <a id="pdf-open" href="#" target="_blank" rel="noopener" hidden>เปิดไฟล์เต็ม ↗</a>
+    </div>
+    <div class="pv-tools" id="pv-tools" hidden>
+      <button class="btn" id="pv-prev" type="button" aria-label="หน้าก่อนหน้า">◀</button>
+      <label class="pv-page">หน้า <input type="number" id="pv-n" min="1" inputmode="numeric" aria-label="เลขหน้า"> / <span id="pv-total"></span></label>
+      <button class="btn" id="pv-next" type="button" aria-label="หน้าถัดไป">▶</button>
+      <span class="pv-sp"></span>
+      <button class="btn" id="pv-zout" type="button" aria-label="ย่อ">−</button>
+      <button class="btn" id="pv-zin" type="button" aria-label="ขยาย">＋</button>
+      <button class="btn" id="pv-fit" type="button">พอดีจอ</button>
+    </div>
+    <div class="viewer-body" id="pdf-body">
+      <div class="pv-scroll" id="pv-scroll" hidden><canvas id="pv-canvas"></canvas></div>
+      <div class="empty" id="pdf-empty">วิเคราะห์ Alarm หรือกดชิปหน้าแบบ<br>เพื่อดูหน้า PDF ที่เกี่ยวข้องตรงนี้</div>
+    </div>
+  </aside>
+</div>
+
+<script src="data.js"></script>
+<script src="manual.js" onerror="void 0"></script>
+<script src="knowledge.js"></script>
+<script src="vendor/qrcode.js"></script>
+<script>
+  // the page was opened in a way that blocks its own data files (e.g. a file preview inside another program)
+  if (!window.SPD_DATA || !window.SPD_KB) {
+    document.body.insertAdjacentHTML("afterbegin",
+      '<div style="background:#b82b2b;color:#fff;padding:14px 20px;font:15px/1.5 system-ui,sans-serif">' +
+      '<b>เปิดหน้านี้ไม่ถูกวิธี — ไฟล์ข้อมูลไม่โหลด</b><br>ให้ปิดหน้านี้ แล้วดับเบิลคลิก <b>run-analyzer.bat</b> ในโฟลเดอร์ spd-alarm-tool ' +
+      '(เบราว์เซอร์จะเปิดที่ <b>http://localhost:5177/spd-alarm-tool/</b>) — ถ้ายังไม่ได้ ให้บอกข้อความที่หน้าต่างสีดำของ run-analyzer.bat แสดง</div>');
+  }
+</script>
+<script src="site-config.js" onerror="void 0"></script>
+<script src="app.js"></script>
+</body>
+</html>
